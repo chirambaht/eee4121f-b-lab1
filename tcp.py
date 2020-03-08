@@ -3,7 +3,7 @@
 # EEE4121F-B Lab 1
 # TCP
 # Modified from https://github.com/mininet/mininet/wiki/Bufferbloat
-
+#Humphrey was here
 from mininet.topo import Topo
 from mininet.node import CPULimitedHost
 from mininet.link import TCLink
@@ -59,13 +59,13 @@ parser.add_argument('--maxq',
                     help="Max buffer size of network interface in packets",
                     default=100)
 
-# Linux uses CUBIC-TCP by default 
+# Linux uses CUBIC-TCP by default
 # For the first experiments we want to investigate Reno Behaviour
 parser.add_argument('--cong',
                     help="Congestion control algorithm to use",
                     default="reno")
 
-# This  only needs to be changed for the TCP BBR experiments                    
+# This  only needs to be changed for the TCP BBR experiments
 parser.add_argument('--qman',
                     help="Queue management algorithm to use",
                     default="pfifo_fast")
@@ -79,14 +79,21 @@ class TCPTopo(Topo):
 
     def build(self, n=2):
         # TODO: create two hosts
-        
+        hosts = []
+        for h in range(n):
+            host = self.addHost('h%s' % (h + 1))
+            hosts.append(host)
+            # 10 Mbps, 5ms delay, 2% loss, 1000 packet queue
+
         # Here I have created a switch.  If you change its name, its
         # interface names will change from s0-eth1 to newname-eth1.
         switch = self.addSwitch('s0')
         # TODO: Add links with appropriate characteristics
-        
-        
-        
+        self.addLink( hosts[0], switch, bw=1000, max_queue_size=100)
+        self.addLink( hosts[1], switch, bw=2)
+
+
+
         return
 
 # Simple wrappers around monitoring utilities.  You are welcome to
@@ -107,20 +114,22 @@ def start_qmon(iface, interval_sec=0.1, outfile="q.txt"):
     return monitor
 
 def start_iperf(net):
-    
+
     # TODO: Retrieve the hosts, replace with appropriate names
     h1 = net.get('h1')
-    
-    
+    h2 = net.get('h2')
+
     print("Starting iperf server...")
     # For those who are curious about the -w 16m parameter, it ensures
     # that the TCP flow is not receiver window limited.  If it is,
     # there is a chance that the router buffer may not get filled up.
     server = h1.popen("iperf -s -w 16m")
+    server = h2.popen("iperf -s -w 16m")
     # TODO: Start the iperf client on h1 and h2.  Ensure that you create two
     # long lived TCP flows in both directions.
-    
-    
+    net.iperf((h1,h2))
+
+
 def start_webserver(net):
     server = net.get('h1')
     proc = server.popen("python http/webserver.py", shell=True)
@@ -135,9 +144,9 @@ def start_ping(net):
     # Hint: Use host.popen(cmd, shell=True).  If you pass shell=True
     # to popen, you can redirect cmd's output using shell syntax.
     # i.e. ping ... > /path/to/ping.
-    
-    
-  
+
+
+
 
 def tcp():
     if not os.path.exists(args.dir):
@@ -161,12 +170,18 @@ def tcp():
     # interface?  The interface numbering starts with 1 and increases.
     # Depending on the order you add links to your network, this
     # number may be 1 or 2.  Ensure you use the correct number.
-    qmon = start_qmon(iface='s0-eth2',
-                      outfile='%s/q.txt' % (args.dir))
+    qmon = start_qmon(iface='s0-eth2',outfile='%s/q.txt' % (args.dir))
+
+    start_qmon(1)
+
+
 
     # TODO: Start iperf, webservers, etc.
-    
-    
+    start_iperf(net)
+
+    start_ping(net)
+
+
 
     # TODO: measure the time it takes to complete webpage transfer
     # from h1 to h2 (say) 3 times.  Hint: check what the following
@@ -176,21 +191,21 @@ def tcp():
 
     # Hint: have a separate function to do this and you may find the
     # loop below useful.
-    
+
     start_time = time()
     while True:
         # do the measurement (say) 3 times.
-       
+
         sleep(5)
         now = time()
         delta = now - start_time
         if delta > args.time:
             break
         print("%.1fs left..." % (args.time - delta))
-    
-       
+
+
     # TODO: compute average (and standard deviation) of the fetch
-    # times.  
+    # times.
 
     # Hint: The command below invokes a CLI which you can use to
     # debug.  It allows you to run arbitrary commands inside your
