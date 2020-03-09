@@ -79,18 +79,16 @@ class TCPTopo(Topo):
 
     def build(self, n=2):
         # TODO: create two hosts
-        hosts = []
-        for h in range(n):
-            host = self.addHost('h%s' % (h + 1))
-            hosts.append(host)
+        host1 = self.addHost('h1')
+        host2 = self.addHost('h2')
             # 10 Mbps, 5ms delay, 2% loss, 1000 packet queue
 
         # Here I have created a switch.  If you change its name, its
         # interface names will change from s0-eth1 to newname-eth1.
         switch = self.addSwitch('s0')
         # TODO: Add links with appropriate characteristics
-        self.addLink( hosts[0], switch, bw=1000, max_queue_size=100)
-        self.addLink( hosts[1], switch, bw=2)
+        self.addLink( host1, switch, bw=1000, max_queue_size=100)
+        self.addLink( host2, switch, bw=2)
 
 
 
@@ -124,7 +122,7 @@ def start_iperf(net):
     # that the TCP flow is not receiver window limited.  If it is,
     # there is a chance that the router buffer may not get filled up.
     server = h1.popen("iperf -s -w 16m")
-    server = h2.popen("iperf -s -w 16m")
+    client = h1.popen("iperf -c %s -t %d" % (h2.IP(), args.time + 5))
     # TODO: Start the iperf client on h1 and h2.  Ensure that you create two
     # long lived TCP flows in both directions.
     net.iperf((h1,h2))
@@ -140,11 +138,34 @@ def start_ping(net):
     # TODO: Start a ping train from h1 to h2 (or h2 to h1, does it
     # matter?)  Measure RTTs every 0.1 second.  Read the ping man page
     # to see how to do this.
-
+    h1 = net.get('h1')
+    h2 = net.get('h2')
+    ping = h1.popen("ping -i 0.1 %s > %s/ping.txt" % (h2.IP(), args.dir), shell=True)
     # Hint: Use host.popen(cmd, shell=True).  If you pass shell=True
     # to popen, you can redirect cmd's output using shell syntax.
     # i.e. ping ... > /path/to/ping.
 
+def get_webpage(net):
+    # h2 fetches index.html from h1 approximately 3 times per run
+    print "Fetching webpages"
+    h1 = net.get('h1')
+    h2 = net.get('h2')
+    fetch_times = []
+
+    start_time = time()
+    while True:
+        sleep(args.time/4)
+        now = time()
+        delta = now - start_time
+        if delta > args.time:
+            break
+        print "%.1fs left..." % (args.time - delta)
+
+        fetch = h2.popen("curl -o /dev/null -s -w %%{time_total} %s/http/index.html"
+                         % h1.IP())
+        fetch.wait()
+        fetch_times.append(float(fetch.communicate()[0]))
+    return fetch_times
 
 
 
@@ -178,8 +199,9 @@ def tcp():
 
     # TODO: Start iperf, webservers, etc.
     start_iperf(net)
-
+    start_webserver(net)
     start_ping(net)
+
 
 
 
@@ -192,17 +214,11 @@ def tcp():
     # Hint: have a separate function to do this and you may find the
     # loop below useful.
 
-    start_time = time()
-    while True:
-        # do the measurement (say) 3 times.
-
-        sleep(5)
-        now = time()
-        delta = now - start_time
-        if delta > args.time:
-            break
-        print("%.1fs left..." % (args.time - delta))
-
+    times = get_webpage(net)
+    sum = 0
+    for i in times:
+        sum += i
+    average = sum/len(times)
 
     # TODO: compute average (and standard deviation) of the fetch
     # times.
