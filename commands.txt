@@ -1,0 +1,14 @@
+Fix tcp occupied error
+sudo fuser -k 6653/tcp
+
+Fix other full error
+sudo mn -c
+
+Run basic
+sudo python tcp.py -B 1000 -b 2 --delay 100 -d out/ --maxq 100 --cong "reno"
+
+Plot ping
+sudo python plot_ping.py --files out/ping.txt --out out/ping.png
+
+Plot queue
+sudo python plot_queue.py --files out/q.txt --out out/queue.png
