@@ -24,6 +24,8 @@ import sys
 import os
 import math
 
+#sudo python tcp.py -B 1000 -b 2 --delay 100 -d out/ --maxq 100 --cong "reno"
+
 
 # TODO: Don't just read the TODO sections in this code.  Remember that
 # one of the goals of this lab is for you to learn how to use
@@ -79,16 +81,22 @@ class TCPTopo(Topo):
 
     def build(self, n=2):
         # TODO: create two hosts
-        host1 = self.addHost('h1')
-        host2 = self.addHost('h2')
+        #host1 = self.addHost('h1')
+        #host2 = self.addHost('h2')
+        hosts = []
+        for h in range(n):
+            host = self.addHost('h%s' % (h + 1))
+            hosts.append(host)
             # 10 Mbps, 5ms delay, 2% loss, 1000 packet queue
 
         # Here I have created a switch.  If you change its name, its
         # interface names will change from s0-eth1 to newname-eth1.
         switch = self.addSwitch('s0')
         # TODO: Add links with appropriate characteristics
-        self.addLink( host1, switch, bw=1000, max_queue_size=100)
-        self.addLink( host2, switch, bw=2)
+        #self.addLink( host1, switch, bw=args.bw_host,delay=args.delay ,max_queue_size=args.maxq)
+        #self.addLink( host2, switch, bw=args.bw_net,delay=args.delay ,max_queue_size=args.maxq)
+        self.addLink( hosts[0], switch,bw=args.bw_host,delay=args.delay ,max_queue_size=args.maxq)
+        self.addLink( hosts[1], switch, bw=args.bw_net,delay=args.delay ,max_queue_size=args.maxq)
 
 
 
@@ -114,22 +122,22 @@ def start_qmon(iface, interval_sec=0.1, outfile="q.txt"):
 def start_iperf(net):
 
     # TODO: Retrieve the hosts, replace with appropriate names
-    h1 = net.get('h1')
-    h2 = net.get('h2')
+    h1 = net.getNodeByName('h1')
+    h2 = net.getNodeByName('h2')
 
     print("Starting iperf server...")
     # For those who are curious about the -w 16m parameter, it ensures
     # that the TCP flow is not receiver window limited.  If it is,
     # there is a chance that the router buffer may not get filled up.
     server = h1.popen("iperf -s -w 16m")
-    client = h1.popen("iperf -c %s -t %d" % (h2.IP(), args.time + 5))
+    client = h2.popen("iperf -c %s -t %d" % (h2.IP(), args.time))
     # TODO: Start the iperf client on h1 and h2.  Ensure that you create two
     # long lived TCP flows in both directions.
-    net.iperf((h1,h2))
+    #net.iperf((h1,h2))
 
 
 def start_webserver(net):
-    server = net.get('h1')
+    server = net.getNodeByName('h1')
     proc = server.popen("python http/webserver.py", shell=True)
     sleep(1)
     return [proc]
@@ -138,8 +146,9 @@ def start_ping(net):
     # TODO: Start a ping train from h1 to h2 (or h2 to h1, does it
     # matter?)  Measure RTTs every 0.1 second.  Read the ping man page
     # to see how to do this.
-    h1 = net.get('h1')
-    h2 = net.get('h2')
+    print("Starting Pings")
+    h1 = net.getNodeByName('h1')
+    h2 = net.getNodeByName('h2')
     ping = h1.popen("ping -i 0.1 %s > %s/ping.txt" % (h2.IP(), args.dir), shell=True)
     # Hint: Use host.popen(cmd, shell=True).  If you pass shell=True
     # to popen, you can redirect cmd's output using shell syntax.
@@ -148,8 +157,8 @@ def start_ping(net):
 def get_webpage(net):
     # h2 fetches index.html from h1 approximately 3 times per run
     print "Fetching webpages"
-    h1 = net.get('h1')
-    h2 = net.get('h2')
+    h1 = net.getNodeByName('h1')
+    h2 = net.getNodeByName('h2')
     fetch_times = []
 
     start_time = time()
@@ -213,8 +222,26 @@ def tcp():
 
     # Hint: have a separate function to do this and you may find the
     # loop below useful.
+    print "Fetching webpages"
+    h1 = net.getNodeByName('h1')
+    h2 = net.getNodeByName('h2')
+    fetch_times = []
 
-    times = get_webpage(net)
+    start_time = time()
+    while True:
+        sleep(args.time/4)
+        now = time()
+        delta = now - start_time
+        if delta > args.time:
+            break
+        print "%.1fs left..." % (args.time - delta)
+
+        fetch = h2.popen("curl -o /dev/null -s -w %%{time_total} %s/http/index.html"
+                         % h1.IP())
+        fetch.wait()
+        fetch_times.append(float(fetch.communicate()[0]))
+    #times = get_webpage(net)
+    times = fetch_times
     sum = 0
     for i in times:
         sum += i
